@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="MathCore" Version="0.0.69" />
+  </ItemGroup>
+
 </Project>
