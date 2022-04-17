@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.Runtime.CompilerServices;
 
 using DataFormats.CST.Infrastructure;
 
@@ -22,6 +23,181 @@ public class FFS
     }
 
     public readonly record struct Pattern(FrequencyInfo Frequency, IReadOnlyList<PatternValue> Values);
+
+    public static IEnumerable<(FrequencyInfo PatternInfo, PatternValue Value)> EnumValues(string FilePath) => EnumValues(new FileInfo(FilePath));
+    public static IEnumerable<(FrequencyInfo PatternInfo, PatternValue Value)> EnumValues(FileInfo File)
+    {
+        using var reader = File.OpenText();
+        foreach (var value in EnumValues(reader))
+            yield return value;
+    }
+
+    public static IEnumerable<(FrequencyInfo PatternInfo, PatternValue Value)> EnumValues(Stream DataStream) => EnumValues(new StreamReader(DataStream));
+
+    public static IEnumerable<(FrequencyInfo PatternInfo, PatternValue Value)> EnumValues(StreamReader Reader)
+    {
+        var line = Reader.ReadLine();
+
+        const string start_line = "// CST Farfield Source File";
+        if (line != start_line)
+            throw new InvalidOperationException("Неверный формат файла - некорректная первая строка файла");
+
+        //string? version = null;
+        //string? data_type = null;
+        var frequency_infos_list = new List<FrequencyInfo>();
+        //Vector3D position = default;
+        //Vector3D x_axis = default;
+        //Vector3D y_axis = default;
+        //Vector3D z_axis = default;
+        var current_frequency_index = 0;
+        FrequencyInfo current_frequency_info = default;
+        while (!Reader.EndOfStream)
+        {
+            line = Reader.ReadLine();
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            if (Reader.EndOfStream) throw new InvalidOperationException("Неожиданный конец файла");
+            switch (line.Trim())
+            {
+                case "// Version:":
+                    //version = Reader.ReadLine();
+                    _ = Reader.ReadLine();
+
+                    line = Reader.ReadLine();
+                    if (!string.IsNullOrEmpty(line)) throw new FormatException("Отсутствует строка-разделитель");
+                    break;
+
+                case "// Data Type":
+                    //data_type = Reader.ReadLine();
+                    _ = Reader.ReadLine();
+
+                    line = Reader.ReadLine();
+                    if (!string.IsNullOrEmpty(line)) throw new FormatException("Отсутствует строка-разделитель");
+                    break;
+
+                case "// #Frequencies":
+                    {
+                        line = Reader.ReadLine()
+                            ?? throw new FormatException("Отсутствует строка с числом частотных составляющих");
+                        var frequencies_count = int.Parse(line.Trim());
+                        frequency_infos_list.Capacity = frequencies_count;
+
+                        line = Reader.ReadLine();
+                        if (!string.IsNullOrEmpty(line)) throw new FormatException("Отсутствует строка-разделитель");
+                    }
+                    break;
+
+                case "// Position":
+                    //line = Reader.ReadLine()
+                    _ = Reader.ReadLine()
+                        ?? throw new FormatException("Отсутствует строка с положением фазового центра");
+                    //position = line.AsSpan().ParseVector3D();
+
+                    line = Reader.ReadLine();
+                    if (!string.IsNullOrEmpty(line)) throw new FormatException("Отсутствует строка-разделитель");
+                    break;
+
+                case "// zAxis":
+                    //line = Reader.ReadLine()
+                    _ = Reader.ReadLine()
+                        ?? throw new FormatException("Отсутствует строка zAxis");
+                    //z_axis = line.AsSpan().ParseVector3D();
+
+                    line = Reader.ReadLine();
+                    if (!string.IsNullOrEmpty(line)) throw new FormatException("Отсутствует строка-разделитель");
+                    break;
+
+                case "// yAxis":
+                    //line = Reader.ReadLine()
+                    _ = Reader.ReadLine()
+                        ?? throw new FormatException("Отсутствует строка yAxis");
+                    //y_axis = line.AsSpan().ParseVector3D();
+
+                    line = Reader.ReadLine();
+                    if (!string.IsNullOrEmpty(line)) throw new FormatException("Отсутствует строка-разделитель");
+                    break;
+
+                case "// xAxis":
+                    //line = Reader.ReadLine()
+                    _ = Reader.ReadLine()
+                        ?? throw new FormatException("Отсутствует строка xAxis");
+                    //x_axis = line.AsSpan().ParseVector3D();
+
+                    line = Reader.ReadLine();
+                    if (!string.IsNullOrEmpty(line)) throw new FormatException("Отсутствует строка-разделитель");
+                    break;
+
+                case "// Radiated/Accepted/Stimulated Power , Frequency":
+                    for (line = Reader.ReadLine(); !string.IsNullOrWhiteSpace(line); line = Reader.ReadLine())
+                    {
+                        var radiated = double.Parse(line, CultureInfo.InvariantCulture);
+
+                        line = Reader.ReadLine()
+                            ?? throw new FormatException("Не определена строка с поглощённой мощностью");
+                        var accepted = double.Parse(line, CultureInfo.InvariantCulture);
+
+                        line = Reader.ReadLine()
+                            ?? throw new FormatException("Не определена строка с мощностью генератора");
+                        var stimulated = double.Parse(line, CultureInfo.InvariantCulture);
+
+                        line = Reader.ReadLine()
+                            ?? throw new FormatException("Не определена строка со значением частоты");
+                        var frequency = double.Parse(line, CultureInfo.InvariantCulture);
+
+                        line = Reader.ReadLine();
+                        if (line is not { Length: 0 })
+                            throw new FormatException("После блока параметров частотной составляющей отсутствует строка-разделитель");
+
+                        frequency_infos_list.Add(new(frequency, radiated, accepted, stimulated));
+                    }
+                    frequency_infos_list.TrimExcess();
+                    current_frequency_info = frequency_infos_list[0];
+                    break;
+
+                case "// >> Total #phi samples, total #theta samples":
+                    {
+                        //line = Reader.ReadLine()
+                        _ = Reader.ReadLine()
+                            ?? throw new FormatException("Отсутствует строка с количеством отсчётов ДН");
+                        //var (phi_count, theta_count) = line.AsSpan().ParseInt32Tuple2();
+
+                        line = Reader.ReadLine();
+                        if (!string.IsNullOrEmpty(line)) throw new FormatException("Отсутствует строка-разделитель");
+                    }
+                    break;
+
+                case "// >> Phi, Theta, Re(E_Theta), Im(E_Theta), Re(E_Phi), Im(E_Phi):":
+                    {
+                        for (line = Reader.ReadLine(); !string.IsNullOrWhiteSpace(line); line = Reader.ReadLine())
+                        {
+                            var str_reader = line.EnumStrings();
+                            str_reader.MoveNext();
+
+                            var ph = str_reader.Current.ToDouble();
+                            str_reader.MoveNext();
+                            var th = str_reader.Current.ToDouble();
+                            str_reader.MoveNext();
+                            var e_re_th = str_reader.Current.ToDouble();
+                            str_reader.MoveNext();
+                            var e_im_th = str_reader.Current.ToDouble();
+                            str_reader.MoveNext();
+                            var e_re_ph = str_reader.Current.ToDouble();
+                            str_reader.MoveNext();
+                            var e_im_ph = str_reader.Current.ToDouble();
+
+                            var pattern_value = new PatternValue(new(ph, th, AngleType.Deg), (new(e_re_th, e_im_th), new(e_re_ph, e_im_ph)));
+                            yield return (current_frequency_info, pattern_value);
+                        }
+
+                        current_frequency_index++;
+                        if (current_frequency_index >= frequency_infos_list.Count)
+                            yield break;
+
+                        current_frequency_info = frequency_infos_list[current_frequency_index];
+                    }
+                    break;
+            }
+        }
+    }
 
     public static Task<FFS> LoadAsync(string FileName, CancellationToken Cancel = default) =>
         LoadAsync(new FileInfo(FileName), Cancel);
@@ -169,7 +345,7 @@ public class FFS
                         {
                             values.Clear();
                             for (line = await Reader.ReadLineAsync(); !string.IsNullOrWhiteSpace(line); line = await Reader.ReadLineAsync())
-                            { 
+                            {
                                 var str_reader = line.EnumStrings();
                                 str_reader.MoveNext();
 
@@ -187,7 +363,7 @@ public class FFS
 
                                 values.Add(new(new(ph, th, AngleType.Deg), (new(e_re_th, e_im_th), new(e_re_ph, e_im_ph))));
                             }
-                            patterns.Add(new (frequency_infos_list[patterns.Count], values.ToArray()));
+                            patterns.Add(new(frequency_infos_list[patterns.Count], values.ToArray()));
                         }
                         break;
                 }
