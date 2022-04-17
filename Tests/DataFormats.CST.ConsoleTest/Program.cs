@@ -1,7 +1,7 @@
 ﻿using System.IO.Compression;
 using DataFormats.CST.BeamPattern;
 
-const string data_file_path = "Patterns.zip";
+const string data_file_path = "Patterns.ffs.zip";
 
 var data_file = new FileInfo(data_file_path);
 using var zip = new ZipArchive(data_file.OpenRead(), ZipArchiveMode.Read);
