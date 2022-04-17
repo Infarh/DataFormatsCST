@@ -82,50 +82,11 @@ internal static class ParseEx
 
     public static SubstringEnumerator EnumStrings(this string Str, char Separator = ' ') => new(Str, Separator);
 
-    public struct SubstringEnumerator
+    public static SubstringEnumerator EnumStringsStart(this string Str, char Separator = ' ')
     {
-        private readonly string _Str;
-        private readonly char _Separator;
-        private int _Start;
-
-        public SubstringEnumerator(string Str, char Separator)
-        {
-            _Str = Str;
-            _Separator = Separator;
-            Current = null!;
-            _Start = 0;
-        }
-
-        public ReadOnlyMemory<char> Current { get; private set; }
-
-        public bool MoveNext()
-        {
-            var length = _Str.Length;
-            if (length == 0)
-                return false;
-
-            if (_Start == length)
-                return false;
-
-            if (_Start == 0)
-            {
-                while (_Start < length && _Str[_Start] == _Separator) _Start++;
-                if (_Start == length)
-                    return false;
-            }
-            else
-            {
-                while (_Start < length && _Str[_Start] == _Separator) _Start++;
-                if (_Start == length)
-                    return false;
-            }
-
-            var end = _Start + 1;
-            while (end < length && _Str[end] != _Separator) end++;
-            Current = _Str.AsMemory(_Start..end);
-            _Start = end;
-            return true;
-        }
+        var enumerator = new SubstringEnumerator(Str, Separator);
+        if(!enumerator.MoveNext()) throw new InvalidOperationException("Невозможно получить значение");
+        return enumerator;
     }
 
     public static int ToInt32(this ReadOnlySpan<char> str) => int.Parse(str);

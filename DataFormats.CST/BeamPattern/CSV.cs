@@ -1,6 +1,10 @@
-﻿using DataFormats.CST.Infrastructure;
+﻿using System.Runtime.CompilerServices;
+using System.Threading.Channels;
+
+using DataFormats.CST.Infrastructure;
 
 using MathCore;
+using MathCore.CSV;
 using MathCore.Values;
 using MathCore.Vectors;
 
@@ -29,6 +33,129 @@ public class CSV
 
         /// <summary>Коэффициент эллиптичности в дБ 20log10(<see cref="AxisRatio"/>)</summary>
         public double AxisRatioDb => AxisRatio.In_dB();
+    }
+
+    public static IEnumerable<PatternValue> EnumValues(string FileName) => EnumValues(new FileInfo(FileName));
+
+    public static IEnumerable<PatternValue> EnumValues(FileInfo File)
+    {
+        using var reader = File.OpenText();
+        foreach (var value in EnumValues(reader))
+            yield return value;
+    }
+
+    public static IEnumerable<PatternValue> EnumValues(Stream DataStream) => EnumValues(new StreamReader(DataStream));
+
+    public static IEnumerable<PatternValue> EnumValues(StreamReader Reader)
+    {
+        var line = Reader.ReadLine()
+            ?? throw new InvalidOperationException("Не удалось прочитать строку заголовка");
+
+        var is_angle_in_deg = GetHeaderUnit(line, "Theta").Span.SequenceEqual("deg.");
+        var is_amplitude_in_db = GetHeaderUnit(line, "Abs(Dir.)").Span.SequenceEqual("dBi");
+
+        Reader.ReadLine();
+
+        while (!Reader.EndOfStream)
+        {
+            line = Reader.ReadLine();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            var str_reader = line.EnumStrings();
+            str_reader.MoveNext();
+
+            var read_only_memory = str_reader.Current;
+            var th = read_only_memory.ToDouble().CorrectFromDeg(is_angle_in_deg);
+            str_reader.MoveNext();
+
+            var ph = str_reader.Current.ToDouble().CorrectFromDeg(is_angle_in_deg);
+            str_reader.MoveNext();
+
+            var angle = new SpaceAngle(th, ph, AngleType.Deg);
+
+            var abs = str_reader.Current.ToDouble().CorrectFromDbP(is_amplitude_in_db);
+            str_reader.MoveNext();
+
+            var abs_th = str_reader.Current.ToDouble().CorrectFromDbP(is_amplitude_in_db);
+
+            var arg_th = str_reader.Current.ToDouble().CorrectFromDeg(is_angle_in_deg);
+            str_reader.MoveNext();
+            var abs_ph = str_reader.Current.ToDouble().CorrectFromDbP(is_amplitude_in_db);
+            str_reader.MoveNext();
+            var arg_ph = str_reader.Current.ToDouble().CorrectFromDeg(is_angle_in_deg);
+            str_reader.MoveNext();
+
+            var ax_ratio = str_reader.Current.ToDouble().CorrectFromDb(is_amplitude_in_db);
+
+            var e_th = Complex.Exp(abs_th, arg_th * Consts.ToRad);
+            var e_ph = Complex.Exp(abs_ph, arg_ph * Consts.ToRad);
+            yield return new(angle, abs, (e_th, e_ph), ax_ratio);
+        }
+    }
+
+    public static IAsyncEnumerable<PatternValue> EnumValuesAsync(string FileName, CancellationToken Cancel = default) => EnumValuesAsync(new FileInfo(FileName), Cancel);
+
+    public static async IAsyncEnumerable<PatternValue> EnumValuesAsync(FileInfo File, [EnumeratorCancellation] CancellationToken Cancel = default)
+    {
+        using var reader = File.OpenText();
+        await foreach (var value in EnumValuesAsync(reader, Cancel).WithCancellation(Cancel))
+            yield return value;
+    }
+
+    public static IAsyncEnumerable<PatternValue> EnumValuesAsync(Stream DataStream, CancellationToken Cancel = default) => EnumValuesAsync(new StreamReader(DataStream), Cancel);
+
+    public static async IAsyncEnumerable<PatternValue> EnumValuesAsync(StreamReader Reader, [EnumeratorCancellation] CancellationToken Cancel = default)
+    {
+        await using var cancel_registration = Cancel.Register(o => ((StreamReader)o!).Dispose(), Reader);
+
+        var line = await Reader.ReadLineAsync().ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Не удалось прочитать строку заголовка");
+
+        var is_angle_in_deg = GetHeaderUnit(line, "Theta").Span.SequenceEqual("deg.");
+        var is_amplitude_in_db = GetHeaderUnit(line, "Abs(Dir.)").Span.SequenceEqual("dBi");
+
+        await Reader.ReadLineAsync();
+
+        var th_min_max = new MinMaxValue();
+        var ph_min_max = new MinMaxValue();
+        while (!Reader.EndOfStream)
+        {
+            line = await Reader.ReadLineAsync();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            var str_reader = line.EnumStrings();
+            str_reader.MoveNext();
+
+            var read_only_memory = str_reader.Current;
+            var th = read_only_memory.ToDouble().CorrectFromDeg(is_angle_in_deg);
+            str_reader.MoveNext();
+
+            var ph = str_reader.Current.ToDouble().CorrectFromDeg(is_angle_in_deg);
+            str_reader.MoveNext();
+
+            th_min_max.AddValue(th);
+            ph_min_max.AddValue(ph);
+            var angle = new SpaceAngle(th, ph, AngleType.Deg);
+
+            var abs = str_reader.Current.ToDouble().CorrectFromDbP(is_amplitude_in_db);
+            str_reader.MoveNext();
+
+            var abs_th = str_reader.Current.ToDouble().CorrectFromDbP(is_amplitude_in_db);
+
+            var arg_th = str_reader.Current.ToDouble().CorrectFromDeg(is_angle_in_deg);
+            str_reader.MoveNext();
+            var abs_ph = str_reader.Current.ToDouble().CorrectFromDbP(is_amplitude_in_db);
+            str_reader.MoveNext();
+            var arg_ph = str_reader.Current.ToDouble().CorrectFromDeg(is_angle_in_deg);
+            str_reader.MoveNext();
+
+            var ax_ratio = str_reader.Current.ToDouble().CorrectFromDb(is_amplitude_in_db);
+
+            var e_th = Complex.Exp(abs_th, arg_th * Consts.ToRad);
+            var e_ph = Complex.Exp(abs_ph, arg_ph * Consts.ToRad);
+
+            yield return new(angle, abs, (e_th, e_ph), ax_ratio);
+        }
     }
 
     private static ReadOnlyMemory<char> GetHeaderUnit(string HeaderLine, string ValueName)
