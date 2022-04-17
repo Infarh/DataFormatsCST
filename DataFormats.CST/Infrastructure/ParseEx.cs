@@ -1,4 +1,6 @@
-﻿using System.Globalization;
+﻿using System.Collections.Generic;
+using System.Globalization;
+
 using MathCore.Vectors;
 
 namespace DataFormats.CST.Infrastructure;
@@ -47,35 +49,83 @@ internal static class ParseEx
         return (x, y);
     }
 
-    public static IEnumerable<ReadOnlyMemory<char>> EnumStrings(this string Str, char Separator = ' ')
+    //public static IEnumerable<ReadOnlyMemory<char>> EnumStrings(this string Str, char Separator = ' ')
+    //{
+    //    var length = Str.Length;
+    //    if (length == 0)
+    //        yield break;
+
+    //    var start = 0;
+    //    while (start < length && Str[start] == Separator) start++;
+    //    if (start == length)
+    //        yield break;
+
+    //    do
+    //    {
+    //        var end = start + 1;
+    //        while (end < length && Str[end] != Separator) end++;
+
+    //        var result = Str.AsMemory(start..end);
+    //        yield return result;
+
+    //        if (end == length)
+    //            yield break;
+
+    //        start = end;
+
+    //        while (start < length && Str[start] == Separator) start++;
+    //        if (start == length)
+    //            yield break;
+    //    }
+    //    while (true);
+    //}
+
+    public static SubstringEnumerator EnumStrings(this string Str, char Separator = ' ') => new(Str, Separator);
+
+    public struct SubstringEnumerator
     {
-        var length = Str.Length;
-        if (length == 0)
-            yield break;
+        private readonly string _Str;
+        private readonly char _Separator;
+        private int _Start;
 
-        var start = 0;
-        while (start < length && Str[start] == Separator) start++;
-        if (start == length)
-            yield break;
-
-        do
+        public SubstringEnumerator(string Str, char Separator)
         {
-            var end = start + 1;
-            while (end < length && Str[end] != Separator) end++;
-
-            var result = Str.AsMemory(start..end);
-            yield return result;
-
-            if (end == length)
-                yield break;
-
-            start = end;
-
-            while (start < length && Str[start] == Separator) start++;
-            if (start == length)
-                yield break;
+            _Str = Str;
+            _Separator = Separator;
+            Current = null!;
+            _Start = 0;
         }
-        while (true);
+
+        public ReadOnlyMemory<char> Current { get; private set; }
+
+        public bool MoveNext()
+        {
+            var length = _Str.Length;
+            if (length == 0)
+                return false;
+
+            if (_Start == length)
+                return false;
+
+            if (_Start == 0)
+            {
+                while (_Start < length && _Str[_Start] == _Separator) _Start++;
+                if (_Start == length)
+                    return false;
+            }
+            else
+            {
+                while (_Start < length && _Str[_Start] == _Separator) _Start++;
+                if (_Start == length)
+                    return false;
+            }
+
+            var end = _Start + 1;
+            while (end < length && _Str[end] != _Separator) end++;
+            Current = _Str.AsMemory(_Start..end);
+            _Start = end;
+            return true;
+        }
     }
 
     public static int ToInt32(this ReadOnlySpan<char> str) => int.Parse(str);

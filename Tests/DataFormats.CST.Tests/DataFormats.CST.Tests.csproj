@@ -23,7 +23,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Patterns.zip">
+    <None Update="Patterns.csv.zip">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Patterns.ffs.zip">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

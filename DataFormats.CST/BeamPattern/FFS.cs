@@ -169,8 +169,8 @@ public class FFS
                         {
                             values.Clear();
                             for (line = await Reader.ReadLineAsync(); !string.IsNullOrWhiteSpace(line); line = await Reader.ReadLineAsync())
-                            {
-                                using var str_reader = line.EnumStrings().GetEnumerator();
+                            { 
+                                var str_reader = line.EnumStrings();
                                 str_reader.MoveNext();
 
                                 var ph = str_reader.Current.ToDouble();
